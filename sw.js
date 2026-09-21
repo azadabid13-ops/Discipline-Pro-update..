@@ -1,11 +1,18 @@
-/* মিলের হিসাব — Service Worker
-   এই ফাইলটা আলাদা রাখতেই হবে (ব্রাউজারের নিয়ম) — বাকি সব কিছু (আইকন, manifest)
-   index.html এর ভেতরেই বসানো আছে, তাই আপলোড করতে হবে মোটে ২টা ফাইল:
-   index.html + sw.js — দুটো একই ফোল্ডারে। */
+/* Discipline — Service Worker
+   Keeps the app (index.html), Google Fonts, and the Firebase SDK scripts
+   cached so the app opens and works offline. Cloud sync (Firebase Auth/
+   Firestore) still needs a live connection, but the app shell, your
+   local data (in localStorage), and the UI all work without one. */
 
 const CACHE_VERSION = 'v1';
-const CACHE_NAME = `mil-hisab-${CACHE_VERSION}`;
+const CACHE_NAME = `discipline-${CACHE_VERSION}`;
 const PAGE_URL = './index.html';
+
+const RUNTIME_CACHE_HOSTS = new Set([
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
+  'cdn.jsdelivr.net'
+]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -31,6 +38,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
+  // পেজ নেভিগেশন: নেট থাকলে আপডেট আনো ও ক্যাশ করো, নেট না থাকলে ক্যাশ থেকে দাও
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -43,6 +51,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // একই অরিজিনের অন্য রিকোয়েস্ট (এই অ্যাপে সবই index.html এর ভেতরেই, তাও safety হিসেবে)
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(req).then((cached) => cached || fetch(req).then((res) => {
@@ -53,7 +62,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+  // গুগল ফন্ট ও ফায়ারবেজ SDK (jsdelivr): ক্যাশ-ফার্স্ট, প্রথমবার অনলাইনে থাকলে সেভ হয়ে যাবে
+  if (RUNTIME_CACHE_HOSTS.has(url.hostname)) {
     event.respondWith(
       caches.match(req).then((cached) => cached || fetch(req).then((res) => {
         if (res && res.ok) caches.open(CACHE_NAME).then((cache) => cache.put(req, res.clone()));
